@@ -14,8 +14,8 @@ import (
 	"github.com/uptrace/bun/dialect/pgdialect"
 	//import "github.com/uptrace/bun/driver/pgdriver"
 
-	"gitlab.com/m0ta/benefy/app/config"
-	"gitlab.com/m0ta/benefy/app/utils"
+	"github.com/m0taru/go-app-structure/app/config"
+	"github.com/m0taru/go-app-structure/app/utils"
 )
 
 // Timeout is a Postgres timeout

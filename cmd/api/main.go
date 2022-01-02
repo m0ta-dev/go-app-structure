@@ -9,13 +9,11 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	
-	
-	"gitlab.com/m0ta/benefy/app/config"
-	"gitlab.com/m0ta/benefy/app/controller"
-	"gitlab.com/m0ta/benefy/app/logger"
-	"gitlab.com/m0ta/benefy/app/router"
-	"gitlab.com/m0ta/benefy/app/service"
-	"gitlab.com/m0ta/benefy/app/store"
+	"github.com/m0taru/go-app-structure/app/config"
+	"github.com/m0taru/go-app-structure/app/controller"
+	"github.com/m0taru/go-app-structure/app/router"
+	"github.com/m0taru/go-app-structure/app/service"
+	"github.com/m0taru/go-app-structure/app/store"
 )
 
 func main() {
