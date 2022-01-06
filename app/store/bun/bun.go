@@ -1,18 +1,12 @@
 package bun
 
 import (
-	//"context"
-	//"log"
-	//"time"
 	"database/sql"
 
-	//"github.com/go-pg/pg/extra/pgotel"
-	//"github.com/go-pg/pg/v10"
-	//"github.com/pkg/errors"
 	"github.com/uptrace/bun"
-	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/dialect/pgdialect"
-	//import "github.com/uptrace/bun/driver/pgdriver"
+	"github.com/uptrace/bun/driver/pgdriver"
+	"github.com/uptrace/bun/extra/bundebug"
 
 	"github.com/m0taru/go-app-structure/app/config"
 	"github.com/m0taru/go-app-structure/app/utils"
@@ -33,13 +27,11 @@ func Dial() (*DB, error) {
 		return nil, utils.ErrorNew("No URL to connect Postgre (bun/Dial)")
 	}
 
-	/*dsn, err := bun.ParseURL(cfg.PgURL)
-	if err != nil {
-		return nil, err
-	}*/
-	
 	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(cfg.PgURL)))
 	db := bun.NewDB(sqldb, pgdialect.New())
+
+	//for furture debug
+	db.AddQueryHook(bundebug.NewQueryHook())
 
 	_, err := db.Exec("SELECT 1")
 	if err != nil {

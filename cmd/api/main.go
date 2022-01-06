@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"strings"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
-	
+
+	"github.com/jackc/pgx"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	
@@ -14,6 +17,7 @@ import (
 	"github.com/m0taru/go-app-structure/app/router"
 	"github.com/m0taru/go-app-structure/app/service"
 	"github.com/m0taru/go-app-structure/app/store"
+	"github.com/m0taru/go-app-structure/app/utils"
 )
 
 func main() {
@@ -29,90 +33,112 @@ func run() error {
 	cfg := config.Get()
 
 	// logger
-	l := logger.Get()
-	ll := log.New(os.Stdout, "INIT\t", log.Ldate|log.Ltime|log.LUTC)
-
+	
 	// Init repository store (with postgresql inside)
 	store, err := store.New(ctx)
 	if err != nil {
-		return errors.Wrap(err, "store.New failed")
+		return utils.ErrorWrap(err, "store.New failed")
 	}
 
-	if cfg.InitDB == "true" {
+	//init DB
+	// TODO do migration
+	if cfg.InitDB {
 		var a string
 		fmt.Print("== IMPORTANT == Start database initialization?(y)")
 		fmt.Fscanln(os.Stdin, &a)
 		if a == "y" {
 			err := initDB()
 			if err != nil {
-				return errors.Wrap(err, "InitDB failed")
+				return utils.ErrorWrap(err, "InitDB failed")
 			}
 		} else {
-			return errors.New("Database initialization canceled")
+			return utils.ErrorNew("Database initialization canceled")
 		}
-		ll.Println("Database initialization completed")
+		fmt.Println("Database initialization completed")
 		return nil
 	}
 
 	// Init service manager
 	serviceManager, err := service.NewManager(ctx, store)
 	if err != nil {
-		return errors.Wrap(err, "manager.New failed")
+		return utils.ErrorWrap(err, "manager.New failed")
 	}
 
 	// Init controllers
-	cUser 		:= controller.NewUsers(ctx, serviceManager, l)
-	cEntity 	:= controller.NewEntities(ctx, store)
-	cPortfolio 	:= controller.NewPortfolios(ctx, serviceManager)
-		//contBalance 	:= controller.NewBalances(ctx, serviceManager, l)
-	//contCurrency 	:= controller.NewCurrencies(ctx, store)
-	//contLang 		:= controller.NewLangs(ctx, store)
-	//cRate 		:= controller.NewRates(ctx, serviceManager, l)
-	cUtil 		:= controller.NewUtils(ctx, store, serviceManager)
-	cMarketData	:= controller.NewMarketData(ctx, serviceManager, l)
-	cLedgerData := controller.NewLedgerData(ctx, serviceManager, store)
-		//contAccountType := controller.NewAccountTypes(ctx, serviceManager, l)
-		//contDivisionType := controller.NewDivisionTypes(ctx, serviceManager, l)
-		//contAccount		:= controller.NewAccounts(ctx, serviceManager, l)
-		//contDivision 	:= controller.NewDivisions(ctx, serviceManager, l)
-		//contWalletData 	:= controller.NewWalletData1(ctx, serviceManager, l)
-	//fileController := controller.NewFiles(ctx, serviceManager, l)
+	cUser 		:= controller.NewUsers(ctx, serviceManager)
 	
 	// Initialize Fiber instance
-
 	app := fiber.New()
 	app.Use(cors.New())
 
 	api := router.SetupRoutes(app, cUser)
-
-	router.SetupRoutesForLedgerData(api, cLedgerData)
-	router.SetupRoutesForMarketData(api, cMarketData)
-	//router.SetupRoutesForRate(api, cRate)
-	router.SetupRoutesForEntity(api, cEntity)
-	
 	router.SetupRoutesForUser(api, cUser)
-	//router.SetupRoutesForLanguage(api, cUtil)
-	router.SetupRoutesForUtils(api, cUtil)
-	router.SetupRoutesForPortfolio(api, cPortfolio)
-	
-	
-	startUpdateServices(ctx, serviceManager)
-	
-	// список api routers
-	
-	ll = log.New(os.Stdout, "INIT\t", log.Ldate|log.Ltime|log.LUTC)
+
 	s := app.Stack()
 	for _, v := range s {
 		for _, w := range v {
-			//ll.Println(s[i][j])
 			if (w.Method == "GET") || (w.Method == "POST") || (w.Method == "DELETE") || (w.Method == "PATCH") {
-				ll.Println(w.Method, w.Path)
+				serviceManager.Logger.Info.Println(w.Method, w.Path)
+			}
+		}
+	}
+
+	// start api server
+	log.Fatal(app.Listen(cfg.HTTPAddr))
+
+	return nil
+}
+
+//initDB ...something
+func initDB () error {
+	fmt.Println("== Database initialization started..")
+	cfg := config.Get()
+	if cfg.PgURL == "" {
+		return utils.ErrorNew("No URL to connect Postgre")
+	}
+	
+	pgxConfig, err := pgx.ParseConnectionString(cfg.PgURL)
+	if err != nil {
+		return err
+	}
+
+	conn, err := pgx.Connect(pgxConfig)
+	if err != nil {
+		return err
+	}
+	
+	_, err = conn.Exec("SELECT 1")
+	if err != nil {
+		return err
+	}
+
+	defer conn.Close()
+
+	// reading sql file to Exec
+	dirData := "./data/init"
+	lst, err := ioutil.ReadDir(dirData)
+	if err != nil {
+		return err
+	}
+	for _, val := range lst {
+		if !val.IsDir() {
+			if (strings.HasSuffix(val.Name(), ".sql")) {
+				data, err := ioutil.ReadFile(fmt.Sprintf("%v/%v", dirData, val.Name()))
+				if err != nil {
+					return err
+				}
+
+				strSQL := string(data)
+
+				_, err = conn.Exec(strSQL)
+				if err != nil {
+					return err
+				}
+				fmt.Println("-- Initialized DB from sql:", val.Name())
 			}
 		}
 	}
 	
-	// запускаем api сервер
-	log.Fatal(app.Listen(cfg.HTTPAddr))
-
+	fmt.Println("== Database initialization completed.. successfully!")
 	return nil
 }
